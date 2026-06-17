@@ -1,0 +1,109 @@
+# Kaful — Prognostic Digital Twins for Industrial Equipment
+
+> **Physics-grounded remaining-useful-life forecasts from OEM documentation. No historical failure data required.**
+
+[kaful.ai](https://kaful.ai) · [LinkedIn](https://www.linkedin.com/in/natalie-buchbinder/)
+
+---
+
+## The problem
+
+Most industrial equipment fails unpredictably. Predictive maintenance exists to solve this — but nearly every approach requires years of historical failure data to train on. Small and mid-sized manufacturers don't have that data. A new machine has no failure history. A one-off production line has no peer fleet to borrow from.
+
+Meanwhile, the physics needed to model how a machine degrades is already written down. It's in the OEM manual, the datasheet, the service interval table. It's just locked in PDFs.
+
+## What Kaful does
+
+Kaful automatically generates a **physics-grounded prognostic digital twin** for rotating industrial equipment directly from OEM documentation — without requiring historical failure data.
+
+Given a machine's technical manuals, Kaful:
+
+1. Extracts component specs, degradation physics, and failure modes using retrieval-grounded LLM extraction
+2. Constructs a physics-based simulation of the machine's degradation over time
+3. Runs a particle filter over the simulation to produce a **RUL probability range** — not a single number, but a calibrated uncertainty estimate
+
+The result is a component-level failure forecast a maintenance engineer can act on, generated from documentation that already exists.
+
+## Architecture
+
+![Kaful agentic pipeline](assets/architecture.png)
+
+The pipeline runs as an **agentic system** — seven autonomous stages, each feeding the next, with no human intervention per document:
+
+| Stage | What happens |
+|---|---|
+| **Ingest** | OEM PDFs are chunked, embedded, and indexed for retrieval |
+| **Schema extract** | RAG + LLM pulls component specs, tolerances, and service intervals |
+| **Simulate** | Physics-based degradation model is constructed from extracted specs |
+| **Comprehend** | LLM reviews the simulation against known failure modes from the manual |
+| **Triage** | Failure paths are ranked by severity and likelihood |
+| **Codegen** | ProgPy degradation model is auto-generated from the triage output |
+| **Prognose** | Particle filter runs over the model; outputs RUL probability range per component |
+
+The agentic framing is deliberate: the goal is zero manual configuration per machine type. Point Kaful at a new OEM manual and it generates a twin.
+
+## Demo — Atlas Copco GA90C Air Compressor
+
+The GA90C is a 90kW rotary screw industrial air compressor, a common fixture in manufacturing plants. Kaful ingested the Atlas Copco GA55-90C instruction book and Compressed Air Manual (9th edition) and produced component-level RUL forecasts across three usage profiles — with no GA90C failure data used at any point.
+
+### RUL dashboard (three usage profiles)
+
+![RUL dashboard](assets/dashboard.png)
+
+The same compressor, the same OEM manual, three completely different risk profiles depending on how it's operated:
+
+- **Continuous / industrial** — nearly all components triggered or imminent; air filter at 2 hrs, air cooler at 7 hrs
+- **Moderate / commercial** — mixed picture; air filter at ~400 hrs, several components already triggered
+- **Light / intermediate** — longest horizon; air filter at ~3,300 hrs, Elektronikon service warning at ~5,200 hrs
+
+Each forecast includes a **particle filter uncertainty range** (min/max across the ensemble), not just a point estimate. The width of that range reflects the physics of the component — a condensate trap float valve has a wider uncertainty band than an oil stop valve because its degradation is more sensitive to operating variability.
+
+### Sample predictions (light / intermediate profile)
+
+| Component | RUL mean (hrs) | Range (hrs) | Std |
+|---|---|---|---|
+| Elektronikon · service warning | 5,202 | 5,202–5,203 | 0.5 |
+| Oil cooler · condensate formation | 5,066 | 4,730–5,287 | 136 |
+| Drive motor · incorrect rotation | 4,193 | 4,058–4,318 | 69 |
+| Oil stop valve · jammed | 4,169 | 4,068–4,262 | 52 |
+| Oil separator element · clogged | 4,159 | 4,052–4,334 | 63 |
+| Inlet valve · stuck open | 3,518 | 3,026–5,019 | 327 |
+| Air filter · choked | 3,294 | 3,013–3,453 | 73 |
+| Condensate trap · flexible clogged | 3,292 | 3,096–3,398 | 74 |
+| Inlet valve · safety valve blow | 1,602 | 1,496–1,741 | 62 |
+| Condensate trap · float valve | 241 | 140–306 | 37 |
+| Air cooler · condensate | 1 | 1–1 | 0 |
+
+### Machines supported
+
+| Machine | OEM source |
+|---|---|
+| Atlas Copco GA90C air compressor | GA55-90C instruction book + Compressed Air Manual 9th ed. |
+| Eversys e'4s espresso machine | Full technical manual |
+| Tempress LPCVD semiconductor furnace | University of Arizona NanoFab documentation (11 files) |
+
+## Tech stack
+
+**ML / prognostics:** Python · NASA ProgPy · particle filter · ensemble propagation
+
+**Extraction:** RAG over OEM PDFs · LLM-driven schema extraction · retrieval-grounded comprehension
+
+**Physics simulation:** Component-level degradation models · physics-based event normalization
+
+**Product:** Next.js · TypeScript · PostgreSQL · Vercel
+
+## Presented at
+
+IWSM 2026 — International Workshop on Software Measurement, American University, Washington DC.
+Poster: *Physics-grounded prognostic digital twins from OEM documentation.*
+
+## Further reading
+
+- [Technical approach](docs/technical-approach.md) — pipeline design decisions, why particle filters, why physics-first
+- [Customer discovery](docs/customer-discovery.md) — who we talked to and what changed
+- [Product notes](docs/product-notes.md) — what Kaful is, who it's for, where it's going
+- [Sample data schema](demo/sample-data-schema.md) — input/output format
+
+---
+
+*Source code is proprietary. This repository documents the approach, architecture, and results.*
